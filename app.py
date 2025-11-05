@@ -6,7 +6,7 @@ from pydantic import BaseModel, ValidationError
 from typing import List, Optional
 
 # FastAPI app to expose HTTP endpoints for the frontend
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
@@ -340,12 +340,23 @@ def display_feedback_report(feedback_data: FeedbackReport):
 # ------------------------ FastAPI Server ------------------------
 app = FastAPI(title="Voice Coach Backend")
 
+# Allowed origins list for validation
+ALLOWED_ORIGINS = [
+    "https://frontend-53528.web.app",
+    "https://frontend-53528.firebaseapp.com",
+    "https://backend-0d8r.onrender.com",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
 # Enable CORS for local frontend and deployed frontend
-# Enable CORS with proper OPTIONS handling - using wildcard for better compatibility
+# Enable CORS with proper OPTIONS handling - using specific origins for Firebase
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins - more permissive for cross-origin requests
-    allow_credentials=False,  # Must be False when using allow_origins=["*"]
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
     expose_headers=["*"],
@@ -357,14 +368,50 @@ def health():
     return {"status": "ok"}
 
 # Explicit OPTIONS handler for /generate_script to handle preflight requests
+# This MUST be defined before the POST route to ensure it's matched first
 @app.options("/generate_script")
-async def options_generate_script():
-    return {"message": "OK"}
+async def options_generate_script(request: Request):
+    """Handle OPTIONS preflight for /generate_script"""
+    origin = request.headers.get("Origin")
+    # Validate origin or use the first allowed origin as fallback
+    if origin and origin in ALLOWED_ORIGINS:
+        allow_origin = origin
+    else:
+        allow_origin = ALLOWED_ORIGINS[0] if ALLOWED_ORIGINS else "*"
+    
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": allow_origin,
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            "Access-Control-Max-Age": "3600",
+            "Access-Control-Allow-Credentials": "true",
+        }
+    )
 
 # Explicit OPTIONS handler for /analyze to handle preflight requests
+# This MUST be defined before the POST route to ensure it's matched first
 @app.options("/analyze")
-async def options_analyze():
-    return {"message": "OK"}
+async def options_analyze(request: Request):
+    """Handle OPTIONS preflight for /analyze"""
+    origin = request.headers.get("Origin")
+    # Validate origin or use the first allowed origin as fallback
+    if origin and origin in ALLOWED_ORIGINS:
+        allow_origin = origin
+    else:
+        allow_origin = ALLOWED_ORIGINS[0] if ALLOWED_ORIGINS else "*"
+    
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": allow_origin,
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            "Access-Control-Max-Age": "3600",
+            "Access-Control-Allow-Credentials": "true",
+        }
+    )
 
 class GenerateRequest(BaseModel):
     topic: str
