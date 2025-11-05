@@ -6,8 +6,9 @@ from pydantic import BaseModel, ValidationError
 from typing import List, Optional
 
 # FastAPI app to expose HTTP endpoints for the frontend
-from fastapi import FastAPI, UploadFile, File, Form, Request, Response
+from fastapi import FastAPI, UploadFile, File, Form, Request, Response, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 import uvicorn
 
 # --- Pydantic Models for Structured Output ---
@@ -351,6 +352,49 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
 ]
 
+# Custom middleware to handle OPTIONS requests early and add CORS headers to all responses
+class OptionsMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Handle OPTIONS preflight requests
+        if request.method == "OPTIONS":
+            origin = request.headers.get("Origin", "")
+            # Check if origin is in allowed list or use first allowed origin
+            if origin in ALLOWED_ORIGINS:
+                allow_origin = origin
+            else:
+                allow_origin = ALLOWED_ORIGINS[0] if ALLOWED_ORIGINS else "*"
+            
+            return Response(
+                status_code=200,
+                headers={
+                    "Access-Control-Allow-Origin": allow_origin,
+                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+                    "Access-Control-Allow-Headers": "*",
+                    "Access-Control-Max-Age": "3600",
+                    "Access-Control-Allow-Credentials": "true",
+                }
+            )
+        
+        # For all other requests, process and add CORS headers to response
+        response = await call_next(request)
+        origin = request.headers.get("Origin", "")
+        
+        # Add CORS headers to response
+        if origin in ALLOWED_ORIGINS:
+            allow_origin = origin
+        else:
+            allow_origin = ALLOWED_ORIGINS[0] if ALLOWED_ORIGINS else "*"
+        
+        response.headers["Access-Control-Allow-Origin"] = allow_origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        
+        return response
+
+# Add OPTIONS middleware BEFORE CORS middleware
+app.add_middleware(OptionsMiddleware)
+
 # Enable CORS for local frontend and deployed frontend
 # Enable CORS with proper OPTIONS handling - using specific origins for Firebase
 app.add_middleware(
@@ -418,9 +462,13 @@ class GenerateRequest(BaseModel):
     duration: Optional[int] = 3
 
 @app.post("/generate_script")
-def api_generate_script(payload: GenerateRequest):
-    data = generate_script_from_topic(payload.topic, payload.duration or 3)
-    return data
+async def api_generate_script(payload: GenerateRequest):
+    try:
+        data = generate_script_from_topic(payload.topic, payload.duration or 3)
+        return data
+    except Exception as e:
+        print(f"Error generating script: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate script: {str(e)}")
 
 @app.post("/analyze")
 async def api_analyze(
