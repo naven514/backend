@@ -352,110 +352,42 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
 ]
 
-# Custom middleware to handle OPTIONS requests early and add CORS headers to all responses
-class OptionsMiddleware(BaseHTTPMiddleware):
+# Custom middleware to handle OPTIONS requests at the earliest possible point
+class CORSMiddlewareCustom(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        # Handle OPTIONS preflight requests
+        # Handle OPTIONS requests immediately - before any routing
         if request.method == "OPTIONS":
-            origin = request.headers.get("Origin", "")
-            # Check if origin is in allowed list or use first allowed origin
-            if origin in ALLOWED_ORIGINS:
-                allow_origin = origin
-            else:
-                allow_origin = ALLOWED_ORIGINS[0] if ALLOWED_ORIGINS else "*"
-            
+            origin = request.headers.get("Origin", "*")
+            # Allow all origins for now to fix the issue
             return Response(
                 status_code=200,
                 headers={
-                    "Access-Control-Allow-Origin": allow_origin,
+                    "Access-Control-Allow-Origin": origin if origin in ALLOWED_ORIGINS else "*",
                     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
-                    "Access-Control-Allow-Headers": "*",
-                    "Access-Control-Max-Age": "3600",
+                    "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept, Origin, X-Requested-With",
+                    "Access-Control-Max-Age": "86400",
                     "Access-Control-Allow-Credentials": "true",
                 }
             )
         
-        # For all other requests, process and add CORS headers to response
+        # Process other requests
         response = await call_next(request)
-        origin = request.headers.get("Origin", "")
         
-        # Add CORS headers to response
-        if origin in ALLOWED_ORIGINS:
-            allow_origin = origin
-        else:
-            allow_origin = ALLOWED_ORIGINS[0] if ALLOWED_ORIGINS else "*"
-        
-        response.headers["Access-Control-Allow-Origin"] = allow_origin
+        # Add CORS headers to all responses
+        origin = request.headers.get("Origin", "*")
+        response.headers["Access-Control-Allow-Origin"] = origin if origin in ALLOWED_ORIGINS else "*"
         response.headers["Access-Control-Allow-Credentials"] = "true"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, Accept, Origin, X-Requested-With"
         
         return response
 
-# Add OPTIONS middleware BEFORE CORS middleware
-app.add_middleware(OptionsMiddleware)
-
-# Enable CORS for local frontend and deployed frontend
-# Enable CORS with proper OPTIONS handling - using specific origins for Firebase
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["*"],
-    expose_headers=["*"],
-    max_age=3600,
-)
+# Add custom CORS middleware FIRST
+app.add_middleware(CORSMiddlewareCustom)
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
-
-# Explicit OPTIONS handler for /generate_script to handle preflight requests
-# This MUST be defined before the POST route to ensure it's matched first
-@app.options("/generate_script")
-async def options_generate_script(request: Request):
-    """Handle OPTIONS preflight for /generate_script"""
-    origin = request.headers.get("Origin")
-    # Validate origin or use the first allowed origin as fallback
-    if origin and origin in ALLOWED_ORIGINS:
-        allow_origin = origin
-    else:
-        allow_origin = ALLOWED_ORIGINS[0] if ALLOWED_ORIGINS else "*"
-    
-    return Response(
-        status_code=200,
-        headers={
-            "Access-Control-Allow-Origin": allow_origin,
-            "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization",
-            "Access-Control-Max-Age": "3600",
-            "Access-Control-Allow-Credentials": "true",
-        }
-    )
-
-# Explicit OPTIONS handler for /analyze to handle preflight requests
-# This MUST be defined before the POST route to ensure it's matched first
-@app.options("/analyze")
-async def options_analyze(request: Request):
-    """Handle OPTIONS preflight for /analyze"""
-    origin = request.headers.get("Origin")
-    # Validate origin or use the first allowed origin as fallback
-    if origin and origin in ALLOWED_ORIGINS:
-        allow_origin = origin
-    else:
-        allow_origin = ALLOWED_ORIGINS[0] if ALLOWED_ORIGINS else "*"
-    
-    return Response(
-        status_code=200,
-        headers={
-            "Access-Control-Allow-Origin": allow_origin,
-            "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization",
-            "Access-Control-Max-Age": "3600",
-            "Access-Control-Allow-Credentials": "true",
-        }
-    )
 
 class GenerateRequest(BaseModel):
     topic: str
