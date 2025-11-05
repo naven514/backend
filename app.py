@@ -358,15 +358,16 @@ class CORSMiddlewareCustom(BaseHTTPMiddleware):
         # Handle OPTIONS requests immediately - before any routing
         if request.method == "OPTIONS":
             origin = request.headers.get("Origin", "*")
-            # Allow all origins for now to fix the issue
+            # Allow the requesting origin (or * if no origin) to fix CORS issues
+            allow_origin = origin if origin != "*" else "*"
             return Response(
                 status_code=200,
                 headers={
-                    "Access-Control-Allow-Origin": origin if origin in ALLOWED_ORIGINS else "*",
+                    "Access-Control-Allow-Origin": allow_origin,
                     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
                     "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept, Origin, X-Requested-With",
                     "Access-Control-Max-Age": "86400",
-                    "Access-Control-Allow-Credentials": "true",
+                    "Access-Control-Allow-Credentials": "true" if allow_origin != "*" else "false",
                 }
             )
         
@@ -375,8 +376,9 @@ class CORSMiddlewareCustom(BaseHTTPMiddleware):
         
         # Add CORS headers to all responses
         origin = request.headers.get("Origin", "*")
-        response.headers["Access-Control-Allow-Origin"] = origin if origin in ALLOWED_ORIGINS else "*"
-        response.headers["Access-Control-Allow-Credentials"] = "true"
+        allow_origin = origin if origin in ALLOWED_ORIGINS or origin != "*" else "*"
+        response.headers["Access-Control-Allow-Origin"] = allow_origin
+        response.headers["Access-Control-Allow-Credentials"] = "true" if allow_origin != "*" else "false"
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, Accept, Origin, X-Requested-With"
         
