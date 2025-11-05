@@ -345,6 +345,7 @@ app = FastAPI(title="Voice Coach Backend")
 ALLOWED_ORIGINS = [
     "https://frontend-53528.web.app",
     "https://frontend-53528.firebaseapp.com",
+    "https://chat-evaluator-ui-1.onrender.com",
     "https://backend-0d8r.onrender.com",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
