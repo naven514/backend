@@ -352,45 +352,46 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
 ]
 
-# Custom middleware to handle OPTIONS requests at the earliest possible point
+// Custom middleware to handle OPTIONS requests at the earliest possible point
 class CORSMiddlewareCustom(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        # Handle OPTIONS requests immediately - before any routing
+        # Handle OPTIONS preflight before routing
         if request.method == "OPTIONS":
-            origin = request.headers.get("Origin", "")
-            # Always allow the requesting origin to fix CORS issues
-            allow_origin = origin if origin else "*"
-            # Set credentials based on whether we have a specific origin
-            allow_creds = "true" if origin and origin in ALLOWED_ORIGINS else "false"
-            
+            origin = request.headers.get("Origin") or "*"
+            req_method = request.headers.get("Access-Control-Request-Method") or "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+            req_headers = request.headers.get("Access-Control-Request-Headers") or "Content-Type, Authorization, Accept, Origin, X-Requested-With"
+
+            allow_origin = origin if origin in ALLOWED_ORIGINS else "*"
+            allow_creds = "true" if origin in ALLOWED_ORIGINS else "false"
+
             return Response(
-                status_code=200,
+                status_code=204,
                 headers={
                     "Access-Control-Allow-Origin": allow_origin,
-                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
-                    "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept, Origin, X-Requested-With",
+                    "Access-Control-Allow-Methods": req_method,
+                    "Access-Control-Allow-Headers": req_headers,
                     "Access-Control-Max-Age": "86400",
                     "Access-Control-Allow-Credentials": allow_creds,
+                    "Vary": "Origin, Access-Control-Request-Method, Access-Control-Request-Headers",
                 }
             )
-        
+
         # Process other requests
         response = await call_next(request)
-        
+
         # Add CORS headers to all responses
-        origin = request.headers.get("Origin", "")
+        origin = request.headers.get("Origin")
         if origin and origin in ALLOWED_ORIGINS:
-            allow_origin = origin
-            allow_creds = "true"
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
         else:
-            allow_origin = "*"
-            allow_creds = "false"
-        
-        response.headers["Access-Control-Allow-Origin"] = allow_origin
-        response.headers["Access-Control-Allow-Credentials"] = allow_creds
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            response.headers["Access-Control-Allow-Credentials"] = "false"
+
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, Accept, Origin, X-Requested-With"
-        
+        response.headers["Vary"] = "Origin, Access-Control-Request-Method, Access-Control-Request-Headers"
+
         return response
 
 # Add custom CORS middleware FIRST - this handles OPTIONS before FastAPI routing
