@@ -356,6 +356,16 @@ app.add_middleware(
 def health():
     return {"status": "ok"}
 
+# Explicit OPTIONS handler for /generate_script to handle preflight requests
+@app.options("/generate_script")
+async def options_generate_script():
+    return {"message": "OK"}
+
+# Explicit OPTIONS handler for /analyze to handle preflight requests
+@app.options("/analyze")
+async def options_analyze():
+    return {"message": "OK"}
+
 class GenerateRequest(BaseModel):
     topic: str
     duration: Optional[int] = 3
