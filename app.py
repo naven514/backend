@@ -357,9 +357,12 @@ class CORSMiddlewareCustom(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         # Handle OPTIONS requests immediately - before any routing
         if request.method == "OPTIONS":
-            origin = request.headers.get("Origin", "*")
-            # Allow the requesting origin (or * if no origin) to fix CORS issues
-            allow_origin = origin if origin != "*" else "*"
+            origin = request.headers.get("Origin", "")
+            # Always allow the requesting origin to fix CORS issues
+            allow_origin = origin if origin else "*"
+            # Set credentials based on whether we have a specific origin
+            allow_creds = "true" if origin and origin in ALLOWED_ORIGINS else "false"
+            
             return Response(
                 status_code=200,
                 headers={
@@ -367,7 +370,7 @@ class CORSMiddlewareCustom(BaseHTTPMiddleware):
                     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
                     "Access-Control-Allow-Headers": "Content-Type, Authorization, Accept, Origin, X-Requested-With",
                     "Access-Control-Max-Age": "86400",
-                    "Access-Control-Allow-Credentials": "true" if allow_origin != "*" else "false",
+                    "Access-Control-Allow-Credentials": allow_creds,
                 }
             )
         
@@ -375,16 +378,22 @@ class CORSMiddlewareCustom(BaseHTTPMiddleware):
         response = await call_next(request)
         
         # Add CORS headers to all responses
-        origin = request.headers.get("Origin", "*")
-        allow_origin = origin if origin in ALLOWED_ORIGINS or origin != "*" else "*"
+        origin = request.headers.get("Origin", "")
+        if origin and origin in ALLOWED_ORIGINS:
+            allow_origin = origin
+            allow_creds = "true"
+        else:
+            allow_origin = "*"
+            allow_creds = "false"
+        
         response.headers["Access-Control-Allow-Origin"] = allow_origin
-        response.headers["Access-Control-Allow-Credentials"] = "true" if allow_origin != "*" else "false"
+        response.headers["Access-Control-Allow-Credentials"] = allow_creds
         response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
         response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, Accept, Origin, X-Requested-With"
         
         return response
 
-# Add custom CORS middleware FIRST
+# Add custom CORS middleware FIRST - this handles OPTIONS before FastAPI routing
 app.add_middleware(CORSMiddlewareCustom)
 
 @app.get("/health")
